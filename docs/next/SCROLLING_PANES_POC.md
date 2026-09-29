@@ -12,16 +12,18 @@ with Rust installed, clone the prototype branch and build it:
 ```sh
 git clone --branch poc/scrolling-panes git@github.com:eelcoh/herdr.git
 cd herdr
-cargo build --locked
+./scripts/run-scrolling-panes-poc.sh
 ```
 
-From the repository root, launch the built prototype with:
+The script builds the checkout, creates its isolated `/tmp/herdr-poc-*`
+directories, and launches a fresh `poc-v3` session with the demo config.
+To launch the built prototype manually from the repository root:
 
 ```sh
 XDG_CONFIG_HOME=/tmp/herdr-poc-config \
 XDG_STATE_HOME=/tmp/herdr-poc-state \
 HERDR_CONFIG_PATH="$PWD/docs/next/scrolling-panes-poc.toml" \
-./target/debug/herdr --session poc-v2
+./target/debug/herdr --session poc-v3
 ```
 
 This keeps the prototype's session files separate from normal Herdr. Its
