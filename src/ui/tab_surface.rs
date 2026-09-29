@@ -65,7 +65,7 @@ pub(crate) fn compute_tab_surface_for(
     });
     let split_borders = tab
         .map(|tab| {
-            if tab.zoomed {
+            if tab.zoomed || app.scrolling_panes {
                 Vec::new()
             } else {
                 tab.layout.splits(area)
@@ -215,6 +215,33 @@ mod tests {
     use ratatui::backend::TestBackend;
     use ratatui::layout::Direction;
     use ratatui::Terminal;
+
+    #[tokio::test]
+    async fn scrolling_mode_uses_strip_geometry_without_split_borders() {
+        let mut workspace = Workspace::test_new("strip");
+        let first = workspace.tabs[0].root_pane;
+        let second = workspace.test_split(Direction::Horizontal);
+        workspace.tabs[0].layout.focus_pane(second);
+
+        let mut app = AppState::test_new();
+        app.workspaces = vec![workspace];
+        app.active = Some(0);
+        app.scrolling_panes = true;
+
+        let surface = compute_tab_surface(
+            &app,
+            &TerminalRuntimeRegistry::new(),
+            Rect::new(0, 0, 100, 20),
+            false,
+            crate::kitty_graphics::HostCellSize::default(),
+        );
+        assert!(surface.split_borders.is_empty());
+        assert_eq!(surface.pane_infos.len(), 2);
+        assert_eq!(surface.pane_infos[0].id, first);
+        assert_eq!(surface.pane_infos[0].rect.width, 50);
+        assert_eq!(surface.pane_infos[1].id, second);
+        assert_eq!(surface.pane_infos[1].rect.width, 50);
+    }
 
     #[tokio::test]
     async fn explicit_surface_layout_drives_render_cursor_and_hyperlinks() {

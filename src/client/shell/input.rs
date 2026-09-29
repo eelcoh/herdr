@@ -742,7 +742,7 @@ impl ClientShellState {
                 KeyCode::Tab => {
                     self.record_navigate_binding(
                         KeybindMatch::Action(KeybindAction::CyclePaneNext),
-                        false,
+                        true,
                         outcome,
                     );
                     return;
@@ -750,7 +750,7 @@ impl ClientShellState {
                 KeyCode::BackTab => {
                     self.record_navigate_binding(
                         KeybindMatch::Action(KeybindAction::CyclePanePrevious),
-                        false,
+                        true,
                         outcome,
                     );
                     return;
@@ -792,6 +792,14 @@ impl ClientShellState {
                 &self.config.keybinds.keybinds.navigate.pane_right,
                 KeybindAction::FocusPaneRight,
             ),
+            (
+                &self.config.keybinds.keybinds.navigate.pane_move_left,
+                KeybindAction::SwapPaneLeft,
+            ),
+            (
+                &self.config.keybinds.keybinds.navigate.pane_move_right,
+                KeybindAction::SwapPaneRight,
+            ),
         ]
         .into_iter()
         .find_map(|(bindings, action)| bindings.matches_direct_key(key).then_some(action));
@@ -832,7 +840,18 @@ impl ClientShellState {
             .map(KeybindMatch::Action)
         });
         if let Some(binding) = binding {
-            self.record_navigate_binding(binding, false, outcome);
+            let preserve_navigate = matches!(
+                binding,
+                KeybindMatch::Action(
+                    KeybindAction::FocusPaneLeft
+                        | KeybindAction::FocusPaneDown
+                        | KeybindAction::FocusPaneUp
+                        | KeybindAction::FocusPaneRight
+                        | KeybindAction::SwapPaneLeft
+                        | KeybindAction::SwapPaneRight
+                )
+            );
+            self.record_navigate_binding(binding, preserve_navigate, outcome);
         } else if is_ctrl_bracket_key(key) {
             self.cancel_navigate(outcome);
         }

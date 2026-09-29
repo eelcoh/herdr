@@ -1,0 +1,23 @@
+onboarding = false
+
+[ui]
+scrolling_panes = true
+tab_bar_position = "bottom"
+
+[keys]
+focus_pane_left = ""
+focus_pane_right = ""
+focus_pane_up = ""
+focus_pane_down = ""
+navigate_pane_left = "["
+navigate_pane_right = "]"
+navigate_pane_down = ""
+navigate_pane_up = ""
+navigate_pane_move_left = "{"
+navigate_pane_move_right = "}"
+previous_workspace = "prefix+k"
+next_workspace = "prefix+j"
+
+[theme]
+name = "catppuccin"
+auto_switch = false

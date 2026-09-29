@@ -2111,6 +2111,17 @@ impl App {
         direction: PaneDirection,
     ) -> Option<PaneId> {
         let tab = self.state.workspaces.get(ws_idx)?.tabs.get(tab_idx)?;
+        if self.state.scrolling_panes && !tab.zoomed {
+            let ids = tab.layout.pane_ids();
+            let index = ids.iter().position(|id| *id == source_pane_id)?;
+            return match direction {
+                PaneDirection::Left => index
+                    .checked_sub(1)
+                    .and_then(|index| ids.get(index).copied()),
+                PaneDirection::Right => ids.get(index + 1).copied(),
+                PaneDirection::Up | PaneDirection::Down => None,
+            };
+        }
         let panes = tab.layout.panes(self.state.view.terminal_area);
         let source = panes.iter().find(|pane| pane.id == source_pane_id)?;
         find_in_direction(source, direction.into(), &panes)
@@ -4249,6 +4260,39 @@ mod tests {
         assert_eq!(focus.focused_pane_id, Some(right_public.clone()));
         assert_eq!(focus.layout.focused_pane_id, right_public);
         assert_eq!(app.state.workspaces[0].focused_pane_id(), Some(right));
+    }
+
+    #[test]
+    fn scrolling_pane_focus_reaches_panes_outside_the_visible_preview() {
+        let mut app = app_with_linked_worktree();
+        app.state.scrolling_panes = true;
+        let first = app.state.workspaces[0].tabs[0].root_pane;
+        let second = app.state.workspaces[0].tabs[0]
+            .layout
+            .split_pane(first, ratatui::layout::Direction::Horizontal, 0.5)
+            .expect("root pane exists");
+        let third = app.state.workspaces[0].tabs[0]
+            .layout
+            .split_pane(second, ratatui::layout::Direction::Horizontal, 0.5)
+            .expect("second pane exists");
+        let fourth = app.state.workspaces[0].tabs[0]
+            .layout
+            .split_pane(third, ratatui::layout::Direction::Horizontal, 0.5)
+            .expect("third pane exists");
+        app.state.workspaces[0].tabs[0].layout.focus_pane(second);
+
+        assert_eq!(
+            app.directional_pane_target(0, 0, second, PaneDirection::Right),
+            Some(third)
+        );
+        assert_eq!(
+            app.directional_pane_target(0, 0, third, PaneDirection::Right),
+            Some(fourth)
+        );
+        assert_eq!(
+            app.directional_pane_target(0, 0, first, PaneDirection::Left),
+            None
+        );
     }
 
     #[test]

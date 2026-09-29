@@ -340,8 +340,13 @@ pub(super) fn resize_tab_panes(
         return;
     }
 
+    let panes = if app.scrolling_panes {
+        tab.layout.scrolling_panes(area)
+    } else {
+        tab.layout.panes(area)
+    };
     for info in apply_pane_chrome(
-        tab.layout.panes(area),
+        panes,
         app.pane_borders,
         app.pane_gaps,
         app.pane_outer_borders,
@@ -416,8 +421,13 @@ pub(super) fn compute_pane_infos_for_tab(
         }];
     }
 
+    let panes = if app.scrolling_panes {
+        tab.layout.scrolling_panes(area)
+    } else {
+        tab.layout.panes(area)
+    };
     let mut pane_infos = apply_pane_chrome(
-        tab.layout.panes(area),
+        panes,
         app.pane_borders,
         app.pane_gaps,
         app.pane_outer_borders,

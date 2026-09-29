@@ -47,6 +47,59 @@ fn enter_navigation(state: &mut ClientShellState) {
     assert_eq!(state.mode, ClientShellMode::Navigate);
 }
 
+#[test]
+fn scrolling_pane_navigation_keys_stay_in_navigate_mode_until_enter() {
+    let config: Config = toml::from_str(include_str!(
+        "../../../../docs/next/scrolling-panes-poc.toml"
+    ))
+    .expect("demo config");
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&config));
+    state.set_snapshot(Box::new(snapshot()));
+    state.set_pane_surface(surface());
+    state.compose(100, 28).unwrap();
+    enter_navigation(&mut state);
+
+    assert!(state.handle_input_bytes(b"l").actions.is_empty());
+    assert_eq!(state.mode, ClientShellMode::Navigate);
+    for (key, direction, swap) in [
+        (
+            b"[".as_slice(),
+            crate::api::schema::PaneDirection::Left,
+            false,
+        ),
+        (
+            b"]".as_slice(),
+            crate::api::schema::PaneDirection::Right,
+            false,
+        ),
+        (
+            b"{".as_slice(),
+            crate::api::schema::PaneDirection::Left,
+            true,
+        ),
+        (
+            b"}".as_slice(),
+            crate::api::schema::PaneDirection::Right,
+            true,
+        ),
+    ] {
+        let outcome = state.handle_input_bytes(key);
+        assert!(
+            matches!(outcome.actions.as_slice(), [ClientShellAction::Endpoint { request, .. }]
+            if match &request.method {
+                crate::api::schema::Method::PaneFocusDirection(params) => !swap && params.direction == direction,
+                crate::api::schema::Method::PaneSwap(params) => swap && params.direction == Some(direction),
+                _ => false,
+            }),
+            "{key:?}"
+        );
+        assert_eq!(state.mode, ClientShellMode::Navigate);
+    }
+
+    state.handle_input_bytes(b"\r");
+    assert_eq!(state.mode, ClientShellMode::Terminal);
+}
+
 fn assert_selected(state: &ClientShellState, endpoint: &ClientEndpointId, workspace: &str) {
     assert_eq!(
         state.navigate_workspace_id,
