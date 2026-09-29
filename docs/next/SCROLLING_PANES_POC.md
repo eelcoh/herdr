@@ -10,7 +10,7 @@ The ready-to-use config is `docs/next/scrolling-panes-poc.toml`. On macOS,
 with Rust installed, clone the prototype branch and build it:
 
 ```sh
-git clone --branch poc/scrolling-panes https://github.com/eelcoh/herdr.git
+git clone --branch poc/scrolling-panes git@github.com:eelcoh/herdr.git
 cd herdr
 cargo build --locked
 ```
