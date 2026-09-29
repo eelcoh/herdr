@@ -98,16 +98,33 @@ pub(super) fn render_mode_bar(
                 ]);
             }
             ClientShellMode::Navigate => {
+                let navigate = &keybinds.keybinds.navigate;
+                let pane_keys = format!(
+                    "{}/{}",
+                    navigate.pane_left.label().unwrap_or_else(|| "←".to_owned()),
+                    navigate
+                        .pane_right
+                        .label()
+                        .unwrap_or_else(|| "→".to_owned())
+                );
                 segments.extend([
                     (" NAVIGATE ".to_owned(), mode_style),
                     (" esc back  ".to_owned(), base),
                     ("↑/↓".to_owned(), key),
                     (" workspace  ".to_owned(), base),
-                    ("tab".to_owned(), key),
+                    (pane_keys, key),
                     (" pane  ".to_owned(), base),
-                    (prefix_rhs(&keybinds.keybinds.help), key),
-                    (" keybinds".to_owned(), base),
                 ]);
+                if let (Some(left), Some(right)) = (
+                    navigate.pane_move_left.label(),
+                    navigate.pane_move_right.label(),
+                ) {
+                    segments.extend([
+                        (format!("{left}/{right}"), key),
+                        (" move  ".to_owned(), base),
+                    ]);
+                }
+                segments.extend([("enter".to_owned(), key), (" done".to_owned(), base)]);
             }
             ClientShellMode::Resize => {
                 segments.extend([

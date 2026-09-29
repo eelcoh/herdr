@@ -28,7 +28,14 @@ pub(crate) fn render_tab_bar(
             display_width(&label).saturating_add(4).max(MIN_TAB_WIDTH)
         })
         .collect::<Vec<_>>();
-    let content = tab_bar_content_area(snapshot, area);
+    let pane_strip = config
+        .scrolling_panes
+        .then(|| pane_strip_label(snapshot))
+        .flatten();
+    let pane_strip_area = pane_strip
+        .as_deref()
+        .and_then(|label| pane_strip_area(snapshot, area, label));
+    let content = tab_bar_content_area(snapshot, area, pane_strip_area);
     let mouse_chrome = config.mouse_capture;
     let new_tab_width = if mouse_chrome { NEW_TAB_WIDTH } else { 0 };
     let desired_total = desired_widths
@@ -221,6 +228,52 @@ pub(crate) fn render_tab_bar(
         }
     }
     render_tab_bar_status(buffer, area, snapshot, palette);
+    if let (Some(label), Some(strip_area)) = (pane_strip, pane_strip_area) {
+        put_text(
+            buffer,
+            strip_area.x,
+            strip_area.y,
+            strip_area.width,
+            &label,
+            Style::default().fg(palette.accent).bg(palette.panel_bg),
+        );
+    }
+}
+
+fn pane_strip_label(snapshot: &ClientShellSnapshot) -> Option<String> {
+    let tab_id = snapshot.focused_tab_id.as_deref()?;
+    if snapshot
+        .tabs
+        .iter()
+        .any(|tab| tab.tab_id == tab_id && tab.zoomed)
+    {
+        return None;
+    }
+    let panes = snapshot
+        .panes
+        .iter()
+        .filter(|pane| pane.tab_id == tab_id)
+        .collect::<Vec<_>>();
+    let focused = panes
+        .iter()
+        .position(|pane| Some(pane.pane_id.as_str()) == snapshot.focused_pane_id.as_deref())?;
+    let first_visible = focused.min(panes.len().saturating_sub(2));
+    let hidden_right = panes.len().saturating_sub(first_visible + 2);
+    Some(format!(
+        "←{first_visible}  {}/{}  {hidden_right}→",
+        focused + 1,
+        panes.len()
+    ))
+}
+
+fn pane_strip_area(snapshot: &ClientShellSnapshot, area: Rect, label: &str) -> Option<Rect> {
+    let right = tab_bar_status_area(snapshot, area)
+        .map(|status| status.x.saturating_sub(1))
+        .unwrap_or_else(|| area.right());
+    let width = display_width(label);
+    let available = right.saturating_sub(area.x);
+    (available >= MIN_TAB_STRIP_WIDTH.saturating_add(width).saturating_add(1))
+        .then(|| Rect::new(right - width, area.y, width, 1))
 }
 
 pub(crate) fn tab_bar_status_width(snapshot: &ClientShellSnapshot) -> u16 {
@@ -244,9 +297,16 @@ fn tab_bar_status_area(snapshot: &ClientShellSnapshot, area: Rect) -> Option<Rec
         .then(|| Rect::new(area.right().saturating_sub(width), area.y, width, 1))
 }
 
-fn tab_bar_content_area(snapshot: &ClientShellSnapshot, area: Rect) -> Rect {
-    let reserved = tab_bar_status_area(snapshot, area)
-        .map(|status| status.width.saturating_add(1))
+fn tab_bar_content_area(
+    snapshot: &ClientShellSnapshot,
+    area: Rect,
+    pane_strip_area: Option<Rect>,
+) -> Rect {
+    let reserved = pane_strip_area
+        .map(|strip| area.right().saturating_sub(strip.x).saturating_add(1))
+        .or_else(|| {
+            tab_bar_status_area(snapshot, area).map(|status| status.width.saturating_add(1))
+        })
         .unwrap_or(0);
     Rect {
         width: area.width.saturating_sub(reserved),
@@ -381,7 +441,64 @@ fn tab_label(tab: &ClientShellTab) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::max_tab_scroll;
+    use super::{max_tab_scroll, pane_strip_label, render_tab_bar, ShellHitMap};
+    use ratatui::{buffer::Buffer, layout::Rect};
+
+    #[test]
+    fn pane_strip_cue_tracks_focus_and_hidden_panes() {
+        let mut snapshot = crate::client::shell::tests::snapshot();
+        let first = snapshot.panes[0].clone();
+        snapshot.panes = (1..=5)
+            .map(|number| {
+                let mut pane = first.clone();
+                pane.pane_id = format!("pane_{number}");
+                pane
+            })
+            .collect();
+        for (focused, expected) in [
+            (1, "←0  1/5  3→"),
+            (2, "←1  2/5  2→"),
+            (3, "←2  3/5  1→"),
+            (4, "←3  4/5  0→"),
+            (5, "←3  5/5  0→"),
+        ] {
+            snapshot.focused_pane_id = Some(format!("pane_{focused}"));
+            assert_eq!(pane_strip_label(&snapshot).as_deref(), Some(expected));
+        }
+    }
+
+    #[test]
+    fn scrolling_tab_row_renders_pane_cue() {
+        let mut snapshot = crate::client::shell::tests::snapshot();
+        let first = snapshot.panes[0].clone();
+        snapshot.panes = (1..=5)
+            .map(|number| {
+                let mut pane = first.clone();
+                pane.pane_id = format!("pane_{number}");
+                pane
+            })
+            .collect();
+        snapshot.focused_pane_id = Some("pane_3".into());
+        let mut config = crate::config::Config::default();
+        config.ui.scrolling_panes = true;
+        let config = crate::client::shell::ClientShellConfig::from_config(&config);
+        let area = Rect::new(0, 0, 80, 1);
+        let mut buffer = Buffer::empty(area);
+        render_tab_bar(
+            &mut buffer,
+            area,
+            &snapshot,
+            &config,
+            &mut 0,
+            &mut false,
+            None,
+            &mut ShellHitMap::default(),
+        );
+        let row = (0..area.width)
+            .map(|x| buffer[(x, 0)].symbol())
+            .collect::<String>();
+        assert!(row.contains("←2  3/5  1→"), "{row}");
+    }
 
     #[test]
     fn trailing_scroll_limit_accounts_for_full_widths_and_separators() {

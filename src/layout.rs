@@ -129,6 +129,43 @@ impl TileLayout {
         result
     }
 
+    /// Experimental horizontal strip projection of the BSP leaf order.
+    /// Each pane occupies half of the available area. The focused pane and
+    /// one adjacent pane are visible, with the view following focus.
+    /// The underlying tree and pane identities are left untouched.
+    pub fn scrolling_panes(&self, area: Rect) -> Vec<PaneInfo> {
+        let ids = self.pane_ids();
+        let Some(focus_index) = ids.iter().position(|id| *id == self.focus) else {
+            return Vec::new();
+        };
+        if area.width < 2 {
+            return vec![scrolling_pane_info(self.focus, area, true)];
+        }
+        let left_width = area.width / 2;
+        let right_width = area.width - left_width;
+        if ids.len() == 1 {
+            return vec![scrolling_pane_info(
+                self.focus,
+                Rect::new(area.x, area.y, left_width, area.height),
+                true,
+            )];
+        }
+
+        let first_visible = focus_index.min(ids.len() - 2);
+        vec![
+            scrolling_pane_info(
+                ids[first_visible],
+                Rect::new(area.x, area.y, left_width, area.height),
+                first_visible == focus_index,
+            ),
+            scrolling_pane_info(
+                ids[first_visible + 1],
+                Rect::new(area.x + left_width, area.y, right_width, area.height),
+                first_visible + 1 == focus_index,
+            ),
+        ]
+    }
+
     /// Collect all split boundaries for mouse drag resize.
     pub fn splits(&self, area: Rect) -> Vec<SplitBorder> {
         let mut result = Vec::new();
@@ -337,6 +374,17 @@ impl TileLayout {
             focus,
             prev_focus: None,
         }
+    }
+}
+
+fn scrolling_pane_info(id: PaneId, rect: Rect, is_focused: bool) -> PaneInfo {
+    PaneInfo {
+        id,
+        rect,
+        inner_rect: rect,
+        scrollbar_rect: None,
+        borders: Borders::NONE,
+        is_focused,
     }
 }
 
@@ -698,6 +746,66 @@ fn split_rect(area: Rect, direction: Direction, ratio: f32) -> (Rect, Rect) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scrolling_projection_tracks_focus_without_changing_layout() {
+        let (mut layout, first) = TileLayout::new();
+        let area = Rect::new(4, 2, 100, 20);
+        let one = layout.scrolling_panes(area);
+        assert_eq!(one.len(), 1);
+        assert_eq!(one[0].id, first);
+        assert_eq!(one[0].rect, Rect::new(4, 2, 50, 20));
+
+        let second = layout
+            .split_pane(first, Direction::Horizontal, 0.5)
+            .expect("first pane exists");
+        layout.focus_pane(second);
+        let two = layout.scrolling_panes(area);
+        assert_eq!(
+            two.iter().map(|pane| pane.id).collect::<Vec<_>>(),
+            vec![first, second]
+        );
+        assert_eq!(
+            two.iter().map(|pane| pane.rect.width).collect::<Vec<_>>(),
+            vec![50, 50]
+        );
+
+        let third = layout
+            .split_pane(second, Direction::Horizontal, 0.5)
+            .expect("second pane exists");
+        layout.focus_pane(third);
+        let three = layout.scrolling_panes(area);
+        assert_eq!(
+            three.iter().map(|pane| pane.id).collect::<Vec<_>>(),
+            vec![second, third]
+        );
+        assert_eq!(
+            three.iter().map(|pane| pane.rect.width).collect::<Vec<_>>(),
+            vec![50, 50]
+        );
+
+        let fourth = layout
+            .split_pane(third, Direction::Horizontal, 0.5)
+            .expect("third pane exists");
+        let original_ids = layout.pane_ids();
+        layout.focus_pane(fourth);
+        let end = layout.scrolling_panes(area);
+        assert_eq!(
+            end.iter().map(|pane| pane.id).collect::<Vec<_>>(),
+            vec![third, fourth]
+        );
+        assert_eq!(
+            end.iter().map(|pane| pane.rect.width).collect::<Vec<_>>(),
+            vec![50, 50]
+        );
+        layout.focus_pane(second);
+        let back = layout.scrolling_panes(area);
+        assert_eq!(
+            back.iter().map(|pane| pane.id).collect::<Vec<_>>(),
+            vec![second, third]
+        );
+        assert_eq!(layout.pane_ids(), original_ids);
+    }
 
     #[test]
     fn split_paths_preserve_preorder_geometry_and_resize_targets() {

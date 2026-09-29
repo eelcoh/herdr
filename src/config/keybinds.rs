@@ -345,6 +345,8 @@ pub struct NavigateKeybinds {
     pub pane_down: ActionKeybinds,
     pub pane_up: ActionKeybinds,
     pub pane_right: ActionKeybinds,
+    pub pane_move_left: ActionKeybinds,
+    pub pane_move_right: ActionKeybinds,
 }
 
 /// Parsed keybinds for Herdr actions.
@@ -533,6 +535,8 @@ impl Config {
                 pane_down: empty_action!(),
                 pane_up: empty_action!(),
                 pane_right: empty_action!(),
+                pane_move_left: empty_action!(),
+                pane_move_right: empty_action!(),
             },
             help: empty_action!(),
             settings: empty_action!(),
@@ -663,6 +667,16 @@ impl Config {
             apply_navigate!(keybinds.navigate.pane_down, navigate_pane_down, source);
             apply_navigate!(keybinds.navigate.pane_up, navigate_pane_up, source);
             apply_navigate!(keybinds.navigate.pane_right, navigate_pane_right, source);
+            apply_navigate!(
+                keybinds.navigate.pane_move_left,
+                navigate_pane_move_left,
+                source
+            );
+            apply_navigate!(
+                keybinds.navigate.pane_move_right,
+                navigate_pane_move_right,
+                source
+            );
             apply_action!(keybinds.help, help, source);
             apply_action!(keybinds.settings, settings, source);
             apply_action!(keybinds.new_workspace, new_workspace, source);

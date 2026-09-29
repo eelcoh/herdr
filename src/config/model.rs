@@ -369,6 +369,10 @@ pub struct KeysConfig {
     pub navigate_pane_up: BindingConfig,
     /// Focus the pane to the right in navigate mode. Default: "l". Right arrow is always an alias.
     pub navigate_pane_right: BindingConfig,
+    /// Move the focused pane left in navigate mode. Unset by default.
+    pub navigate_pane_move_left: BindingConfig,
+    /// Move the focused pane right in navigate mode. Unset by default.
+    pub navigate_pane_move_right: BindingConfig,
     /// Detach the current client from its Herdr server. Default: "prefix+q".
     pub detach: BindingConfig,
     /// Reload config.toml in the running app/server. Default: "prefix+shift+r".
@@ -506,6 +510,10 @@ pub(crate) struct KeysConfigOverlay {
     navigate_pane_up: Option<BindingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     navigate_pane_right: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    navigate_pane_move_left: Option<BindingConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    navigate_pane_move_right: Option<BindingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     detach: Option<BindingConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -660,6 +668,8 @@ impl<'de> Deserialize<'de> for KeysConfig {
         apply_field!(navigate_pane_down);
         apply_field!(navigate_pane_up);
         apply_field!(navigate_pane_right);
+        apply_field!(navigate_pane_move_left);
+        apply_field!(navigate_pane_move_right);
         apply_field!(detach);
         apply_field!(reload_config);
         apply_field!(open_notification_target);
@@ -765,6 +775,8 @@ impl KeysConfig {
         copy_effective_action_field!(navigate_pane_down, keybinds.navigate.pane_down);
         copy_effective_action_field!(navigate_pane_up, keybinds.navigate.pane_up);
         copy_effective_action_field!(navigate_pane_right, keybinds.navigate.pane_right);
+        copy_effective_action_field!(navigate_pane_move_left, keybinds.navigate.pane_move_left);
+        copy_effective_action_field!(navigate_pane_move_right, keybinds.navigate.pane_move_right);
         copy_effective_action_field!(detach, keybinds.detach);
         copy_effective_action_field!(reload_config, keybinds.reload_config);
         copy_effective_action_field!(open_notification_target, keybinds.open_notification_target);
@@ -978,6 +990,8 @@ pub struct UiConfig {
     pub pane_scrollbars: bool,
     /// Keep split panes visually separated instead of sharing divider borders. Default: true.
     pub pane_gaps: bool,
+    /// Experimental horizontal pane strip, with neighboring pane previews.
+    pub scrolling_panes: bool,
     /// Show agent labels in split pane borders when no manual pane label is set. Default: false.
     pub show_agent_labels_on_pane_borders: bool,
     /// Hide the tab row when the workspace has one tab. Default: false.
@@ -1134,6 +1148,8 @@ impl Default for KeysConfig {
             navigate_pane_down: BindingConfig::one("j"),
             navigate_pane_up: BindingConfig::one("k"),
             navigate_pane_right: BindingConfig::one("l"),
+            navigate_pane_move_left: BindingConfig::empty(),
+            navigate_pane_move_right: BindingConfig::empty(),
             detach: BindingConfig::one("prefix+q"),
             reload_config: BindingConfig::one("prefix+shift+r"),
             open_notification_target: BindingConfig::one("prefix+o"),
@@ -1214,6 +1230,7 @@ impl Default for UiConfig {
             pane_outer_borders: true,
             pane_scrollbars: true,
             pane_gaps: true,
+            scrolling_panes: false,
             show_agent_labels_on_pane_borders: false,
             hide_tab_bar_when_single_tab: false,
             tab_bar_position: TabBarPositionConfig::Top,
@@ -1560,6 +1577,17 @@ tab_bar_right_separator = " · "
             TabBarRightEntryConfig::Hostname
         ));
         assert_eq!(config.ui.tab_bar_right_separator, " · ");
+    }
+
+    #[test]
+    fn scrolling_panes_demo_config_enables_the_projection() {
+        let config: Config =
+            toml::from_str(include_str!("../../docs/next/scrolling-panes-poc.toml"))
+                .expect("demo config must be valid TOML");
+        assert!(config.ui.scrolling_panes);
+        assert_eq!(config.onboarding, Some(false));
+        let diagnostics = config.collect_diagnostics();
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
     }
 
     #[test]
