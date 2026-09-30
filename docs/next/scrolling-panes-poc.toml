@@ -15,6 +15,9 @@ navigate_pane_down = ""
 navigate_pane_up = ""
 navigate_pane_move_left = "{"
 navigate_pane_move_right = "}"
+resize_mode = ""
+resize_pane_right = ["cmd+r", "prefix+r"]
+zoom = ["cmd+f", "prefix+f"]
 previous_workspace = "prefix+k"
 next_workspace = "prefix+j"
 

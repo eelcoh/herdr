@@ -732,13 +732,22 @@ impl App {
             .min(0.5);
         let direction: NavDirection = params.direction.into();
         let area = self.state.view.terminal_area;
+        let cycle_scrolling_width = self.state.scrolling_panes
+            && params.direction == PaneDirection::Right
+            && params.amount.is_none();
         let changed = self
             .state
             .workspaces
             .get_mut(ws_idx)
             .and_then(|ws| ws.tabs.get_mut(tab_idx))
-            .is_some_and(|tab| tab.layout.resize_pane(pane_id, direction, amount, area));
-        if changed {
+            .is_some_and(|tab| {
+                if cycle_scrolling_width {
+                    tab.layout.cycle_scrolling_pane_width(pane_id)
+                } else {
+                    tab.layout.resize_pane(pane_id, direction, amount, area)
+                }
+            });
+        if changed && !cycle_scrolling_width {
             self.schedule_session_save();
         }
 
@@ -4215,6 +4224,58 @@ mod tests {
                 if layout.tab_id == app.public_tab_id(0, 0).unwrap()
                     && (layout.splits[0].ratio - 0.6).abs() < f32::EPSILON
         ));
+    }
+
+    #[test]
+    fn scrolling_pane_resize_cycles_width_and_preserves_split_ratio() {
+        let mut app = app_with_linked_worktree();
+        app.state.scrolling_panes = true;
+        let root = app.state.workspaces[0].tabs[0].root_pane;
+        let second = app.state.workspaces[0].test_split(ratatui::layout::Direction::Horizontal);
+        app.state.workspaces[0].tabs[0].layout.focus_pane(root);
+        let root_public = app.public_pane_id(0, root).unwrap();
+
+        let response = app.handle_pane_resize(
+            "req".into(),
+            crate::api::schema::PaneResizeParams {
+                pane_id: Some(root_public),
+                direction: PaneDirection::Right,
+                amount: None,
+            },
+        );
+        let success: SuccessResponse = serde_json::from_str(&response).unwrap();
+        let ResponseResult::PaneResize { resize } = success.result else {
+            panic!("expected pane resize response");
+        };
+        assert!(resize.changed);
+        assert!((resize.layout.splits[0].ratio - 0.5).abs() < f32::EPSILON);
+        let projected = app.state.workspaces[0].tabs[0]
+            .layout
+            .scrolling_panes(ratatui::layout::Rect::new(0, 0, 120, 20));
+        assert_eq!(projected[0].id, root);
+        assert_eq!(projected[1].id, second);
+        assert_eq!(projected[0].rect.width, 80);
+    }
+
+    #[test]
+    fn scrolling_single_pane_can_zoom_to_full_width() {
+        let mut app = app_with_linked_worktree();
+        app.state.scrolling_panes = true;
+        let root = app.state.workspaces[0].tabs[0].root_pane;
+        let root_public = app.public_pane_id(0, root).unwrap();
+        let response = app.handle_pane_zoom(
+            "req".into(),
+            PaneZoomParams {
+                pane_id: Some(root_public),
+                mode: PaneZoomMode::Toggle,
+            },
+        );
+        let success: SuccessResponse = serde_json::from_str(&response).unwrap();
+        let ResponseResult::PaneZoom { zoom } = success.result else {
+            panic!("expected pane zoom response");
+        };
+        assert!(zoom.zoomed);
+        assert!(app.state.workspaces[0].tabs[0].zoomed);
     }
 
     #[test]

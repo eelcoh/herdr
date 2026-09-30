@@ -824,7 +824,7 @@ impl AppState {
             .workspaces
             .get_mut(ws_idx)
             .and_then(|ws| ws.tabs.get_mut(tab_idx))?;
-        if tab.layout.pane_count() <= 1 {
+        if tab.layout.pane_count() <= 1 && !self.scrolling_panes {
             return Some(PaneZoomOutcome {
                 changed: false,
                 focus_changed,

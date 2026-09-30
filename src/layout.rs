@@ -1,6 +1,6 @@
 //! BSP tree layout for tiling panes within a workspace.
 
-use std::cmp::Reverse;
+use std::{cmp::Reverse, collections::HashMap};
 
 use ratatui::{
     layout::{Direction, Rect},
@@ -89,6 +89,33 @@ pub struct TileLayout {
     /// (`split_pane`, `close_pane`, unfocused `insert_pane_near`) so internal
     /// focus excursions never corrupt it.
     prev_focus: Option<PaneId>,
+    scrolling_widths: HashMap<PaneId, ScrollingPaneWidth>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScrollingPaneWidth {
+    Half,
+    TwoThirds,
+    OneThird,
+}
+
+impl ScrollingPaneWidth {
+    fn next(self) -> Self {
+        match self {
+            Self::Half => Self::TwoThirds,
+            Self::TwoThirds => Self::OneThird,
+            Self::OneThird => Self::Half,
+        }
+    }
+
+    fn columns(self, available: u16) -> u16 {
+        let columns = match self {
+            Self::Half => available / 2,
+            Self::TwoThirds => available.saturating_sub(available / 3),
+            Self::OneThird => available / 3,
+        };
+        columns.clamp(1, available.saturating_sub(1))
+    }
 }
 
 impl TileLayout {
@@ -101,6 +128,7 @@ impl TileLayout {
                 root: Node::Pane(root_id),
                 focus: root_id,
                 prev_focus: None,
+                scrolling_widths: HashMap::new(),
             },
             root_id,
         )
@@ -130,8 +158,9 @@ impl TileLayout {
     }
 
     /// Experimental horizontal strip projection of the BSP leaf order.
-    /// Each pane occupies half of the available area. The focused pane and
-    /// one adjacent pane are visible, with the view following focus.
+    /// The focused pane's width cycles through half, two thirds, and one third.
+    /// The focused pane and one adjacent pane are visible, with the view
+    /// following focus.
     /// The underlying tree and pane identities are left untouched.
     pub fn scrolling_panes(&self, area: Rect) -> Vec<PaneInfo> {
         let ids = self.pane_ids();
@@ -141,17 +170,27 @@ impl TileLayout {
         if area.width < 2 {
             return vec![scrolling_pane_info(self.focus, area, true)];
         }
-        let left_width = area.width / 2;
-        let right_width = area.width - left_width;
+        let focused_width = self
+            .scrolling_widths
+            .get(&self.focus)
+            .copied()
+            .unwrap_or(ScrollingPaneWidth::Half)
+            .columns(area.width);
         if ids.len() == 1 {
             return vec![scrolling_pane_info(
                 self.focus,
-                Rect::new(area.x, area.y, left_width, area.height),
+                Rect::new(area.x, area.y, focused_width, area.height),
                 true,
             )];
         }
 
         let first_visible = focus_index.min(ids.len() - 2);
+        let left_width = if first_visible == focus_index {
+            focused_width
+        } else {
+            area.width - focused_width
+        };
+        let right_width = area.width - left_width;
         vec![
             scrolling_pane_info(
                 ids[first_visible],
@@ -164,6 +203,25 @@ impl TileLayout {
                 first_visible + 1 == focus_index,
             ),
         ]
+    }
+
+    /// Cycle a pane's width in the scrolling projection, leaving BSP ratios intact.
+    pub fn cycle_scrolling_pane_width(&mut self, pane_id: PaneId) -> bool {
+        if !self.pane_ids().contains(&pane_id) {
+            return false;
+        }
+        let next = self
+            .scrolling_widths
+            .get(&pane_id)
+            .copied()
+            .unwrap_or(ScrollingPaneWidth::Half)
+            .next();
+        if next == ScrollingPaneWidth::Half {
+            self.scrolling_widths.remove(&pane_id);
+        } else {
+            self.scrolling_widths.insert(pane_id, next);
+        }
+        true
     }
 
     /// Collect all split boundaries for mouse drag resize.
@@ -257,6 +315,7 @@ impl TileLayout {
             self.root = new_root;
             self.focus = new_focus;
             self.prev_focus = None;
+            self.scrolling_widths.remove(&target);
             true
         } else {
             false
@@ -281,6 +340,7 @@ impl TileLayout {
         if self.prev_focus == Some(id) {
             self.prev_focus = None;
         }
+        self.scrolling_widths.remove(&id);
         true
     }
 
@@ -373,6 +433,7 @@ impl TileLayout {
             root,
             focus,
             prev_focus: None,
+            scrolling_widths: HashMap::new(),
         }
     }
 }
@@ -805,6 +866,33 @@ mod tests {
             vec![second, third]
         );
         assert_eq!(layout.pane_ids(), original_ids);
+    }
+
+    #[test]
+    fn scrolling_width_cycles_per_pane_without_changing_split_ratios() {
+        let (mut layout, first) = TileLayout::new();
+        let second = layout
+            .split_pane(first, Direction::Horizontal, 0.5)
+            .expect("root pane exists");
+        let area = Rect::new(3, 2, 120, 20);
+        layout.focus_pane(second);
+        let before = split_ratios(layout.root());
+
+        for expected in [80, 40, 60] {
+            assert!(layout.cycle_scrolling_pane_width(second));
+            let panes = layout.scrolling_panes(area);
+            assert_eq!(panes[1].rect.width, expected);
+            assert_eq!(panes[0].rect.width + panes[1].rect.width, area.width);
+        }
+        assert_eq!(split_ratios(layout.root()), before);
+
+        assert!(layout.cycle_scrolling_pane_width(second));
+        layout.focus_pane(first);
+        assert_eq!(layout.scrolling_panes(area)[0].rect.width, 60);
+        layout.focus_pane(second);
+        assert_eq!(layout.scrolling_panes(area)[1].rect.width, 80);
+        assert_eq!(layout.scrolling_panes(Rect::new(0, 0, 9, 20))[1].rect.width, 6);
+        assert_eq!(layout.scrolling_panes(Rect::new(0, 0, 2, 20))[1].rect.width, 1);
     }
 
     #[test]

@@ -100,6 +100,32 @@ fn scrolling_pane_navigation_keys_stay_in_navigate_mode_until_enter() {
     assert_eq!(state.mode, ClientShellMode::Terminal);
 }
 
+#[test]
+fn scrolling_pane_width_shortcuts_send_resize_and_zoom() {
+    let config: Config = toml::from_str(include_str!(
+        "../../../../docs/next/scrolling-panes-poc.toml"
+    ))
+    .expect("demo config");
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&config));
+    state.set_snapshot(Box::new(snapshot()));
+    state.set_pane_surface(surface());
+
+    for (letter, resize) in [('r', true), ('f', false)] {
+        let outcome = state.handle_raw_events(vec![RawInputEvent::Key(
+            crate::input::TerminalKey::new(KeyCode::Char(letter), KeyModifiers::SUPER),
+        )]);
+        assert!(
+            matches!(outcome.actions.as_slice(), [ClientShellAction::Endpoint { request, .. }]
+            if match &request.method {
+                crate::api::schema::Method::PaneResize(params) => resize && params.direction == crate::api::schema::PaneDirection::Right && params.amount.is_none(),
+                crate::api::schema::Method::PaneZoom(params) => !resize && params.mode == crate::api::schema::PaneZoomMode::Toggle,
+                _ => false,
+            }),
+            "Cmd+{letter}"
+        );
+    }
+}
+
 fn assert_selected(state: &ClientShellState, endpoint: &ClientEndpointId, workspace: &str) {
     assert_eq!(
         state.navigate_workspace_id,
