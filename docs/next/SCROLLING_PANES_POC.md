@@ -1,8 +1,9 @@
 # Scrolling panes proof of concept
 
 This branch experiments with a horizontal pane strip inside each Herdr tab.
-Each pane starts at half the available width. The focused pane and one adjacent
-pane are visible, so opening a third pane moves the first one out of view.
+Each pane starts at half the available width and keeps its own width choice.
+The focused pane and one adjacent pane are visible, so opening a third pane
+moves the first one out of view.
 Left and right pane focus follows the strip's order; workspaces remain
 Herdr's vertical level.
 
@@ -16,14 +17,14 @@ cd herdr
 ```
 
 The script builds the checkout, creates its isolated `/tmp/herdr-poc-*`
-directories, and launches a fresh `poc-widths` session with the demo config.
+directories, and launches a fresh `poc-widths-v2` session with the demo config.
 To launch the built prototype manually from the repository root:
 
 ```sh
 XDG_CONFIG_HOME=/tmp/herdr-poc-config \
 XDG_STATE_HOME=/tmp/herdr-poc-state \
 HERDR_CONFIG_PATH="$PWD/docs/next/scrolling-panes-poc.toml" \
-./target/debug/herdr --session poc-widths
+./target/debug/herdr --session poc-widths-v2
 ```
 
 This keeps the prototype's session files separate from normal Herdr. Its
@@ -63,6 +64,9 @@ Press `Cmd+R` to cycle the focused pane through half, two thirds, and one third
 of the available width. `Cmd+F` toggles full width. These also work as
 `Ctrl+b`, then `r` or `f` when the outer terminal does not send Command keys.
 Width choices belong to individual panes and reset when the session restarts.
+When two panes fit, both keep their chosen widths and spare space stays blank.
+When they exceed the viewport, the neighboring preview is clipped so the
+focused pane keeps its chosen width.
 
 The bottom tab row shows a cue such as `←2  3/5  1→`: two panes are hidden
 to the left, pane 3 of 5 is focused, and one pane is hidden to the right.
