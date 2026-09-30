@@ -10,4 +10,4 @@ export XDG_STATE_HOME=/tmp/herdr-poc-state
 export HERDR_CONFIG_PATH="$repo_dir/docs/next/scrolling-panes-poc.toml"
 mkdir -p "$XDG_CONFIG_HOME" "$XDG_STATE_HOME"
 
-exec "$repo_dir/target/debug/herdr" --session poc-widths "$@"
+exec "$repo_dir/target/debug/herdr" --session poc-widths-v2 "$@"

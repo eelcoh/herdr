@@ -158,9 +158,10 @@ impl TileLayout {
     }
 
     /// Experimental horizontal strip projection of the BSP leaf order.
-    /// The focused pane's width cycles through half, two thirds, and one third.
+    /// Each pane's width cycles through half, two thirds, and one third.
     /// The focused pane and one adjacent pane are visible, with the view
-    /// following focus.
+    /// following focus. A neighbor is clipped when their widths exceed the
+    /// viewport, and unused width remains blank when they fit with room left.
     /// The underlying tree and pane identities are left untouched.
     pub fn scrolling_panes(&self, area: Rect) -> Vec<PaneInfo> {
         let ids = self.pane_ids();
@@ -170,27 +171,32 @@ impl TileLayout {
         if area.width < 2 {
             return vec![scrolling_pane_info(self.focus, area, true)];
         }
-        let focused_width = self
-            .scrolling_widths
-            .get(&self.focus)
-            .copied()
-            .unwrap_or(ScrollingPaneWidth::Half)
-            .columns(area.width);
+        let preferred_width = |pane_id| {
+            self.scrolling_widths
+                .get(&pane_id)
+                .copied()
+                .unwrap_or(ScrollingPaneWidth::Half)
+                .columns(area.width)
+        };
         if ids.len() == 1 {
             return vec![scrolling_pane_info(
                 self.focus,
-                Rect::new(area.x, area.y, focused_width, area.height),
+                Rect::new(area.x, area.y, preferred_width(self.focus), area.height),
                 true,
             )];
         }
 
         let first_visible = focus_index.min(ids.len() - 2);
-        let left_width = if first_visible == focus_index {
-            focused_width
-        } else {
-            area.width - focused_width
-        };
-        let right_width = area.width - left_width;
+        let left_preferred = preferred_width(ids[first_visible]);
+        let right_preferred = preferred_width(ids[first_visible + 1]);
+        let (left_width, right_width) =
+            if u32::from(left_preferred) + u32::from(right_preferred) <= u32::from(area.width) {
+                (left_preferred, right_preferred)
+            } else if first_visible == focus_index {
+                (left_preferred, area.width - left_preferred)
+            } else {
+                (area.width - right_preferred, right_preferred)
+            };
         vec![
             scrolling_pane_info(
                 ids[first_visible],
@@ -878,11 +884,10 @@ mod tests {
         layout.focus_pane(second);
         let before = split_ratios(layout.root());
 
-        for expected in [80, 40, 60] {
+        for (left, right) in [(40, 80), (60, 40), (60, 60)] {
             assert!(layout.cycle_scrolling_pane_width(second));
             let panes = layout.scrolling_panes(area);
-            assert_eq!(panes[1].rect.width, expected);
-            assert_eq!(panes[0].rect.width + panes[1].rect.width, area.width);
+            assert_eq!((panes[0].rect.width, panes[1].rect.width), (left, right));
         }
         assert_eq!(split_ratios(layout.root()), before);
 
@@ -891,8 +896,27 @@ mod tests {
         assert_eq!(layout.scrolling_panes(area)[0].rect.width, 60);
         layout.focus_pane(second);
         assert_eq!(layout.scrolling_panes(area)[1].rect.width, 80);
-        assert_eq!(layout.scrolling_panes(Rect::new(0, 0, 9, 20))[1].rect.width, 6);
-        assert_eq!(layout.scrolling_panes(Rect::new(0, 0, 2, 20))[1].rect.width, 1);
+
+        assert!(layout.cycle_scrolling_pane_width(first));
+        assert!(layout.cycle_scrolling_pane_width(first));
+        for focused in [first, second] {
+            layout.focus_pane(focused);
+            let panes = layout.scrolling_panes(area);
+            assert_eq!((panes[0].rect.width, panes[1].rect.width), (40, 80));
+        }
+        assert_eq!(
+            layout.scrolling_panes(Rect::new(0, 0, 9, 20))[1].rect.width,
+            6
+        );
+        assert_eq!(
+            layout.scrolling_panes(Rect::new(0, 0, 2, 20))[1].rect.width,
+            1
+        );
+
+        assert!(layout.cycle_scrolling_pane_width(second));
+        let panes = layout.scrolling_panes(area);
+        assert_eq!((panes[0].rect.width, panes[1].rect.width), (40, 40));
+        assert_eq!(panes[1].rect.right(), area.x + 80);
     }
 
     #[test]
