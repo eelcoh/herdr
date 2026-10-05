@@ -1,4 +1,5 @@
 use super::*;
+use crate::protocol::PaneSurfacePane;
 
 #[path = "../shell/overlays.rs"]
 mod overlays;
@@ -247,6 +248,7 @@ pub(super) fn render_mode_bar(
 }
 
 pub(super) struct ShellRenderState<'a> {
+    pub(super) visible_panes: &'a [PaneSurfacePane],
     pub(super) machine_diagnostics: &'a super::machine_diagnostics::MachineDiagnostics,
     pub(super) endpoints: &'a [ClientShellEndpoint],
     pub(super) active_endpoint_id: &'a ClientEndpointId,
@@ -332,6 +334,7 @@ pub(super) fn render_shell(
             layout.tab_bar,
             snapshot,
             config,
+            state.visible_panes,
             state.tab_scroll,
             state.reveal_focused_tab,
             state.tab_drag_insert_index,

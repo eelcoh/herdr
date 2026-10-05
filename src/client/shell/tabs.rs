@@ -1,4 +1,5 @@
 use super::*;
+use crate::protocol::PaneSurfacePane;
 
 const TAB_SCROLL_BUTTON_WIDTH: u16 = 3;
 const MIN_TAB_STRIP_WIDTH: u16 =
@@ -9,6 +10,7 @@ pub(crate) fn render_tab_bar(
     area: Rect,
     snapshot: &ClientShellSnapshot,
     config: &ClientShellConfig,
+    visible_panes: &[PaneSurfacePane],
     tab_scroll: &mut usize,
     reveal_focused_tab: &mut bool,
     tab_drag_insert_index: Option<usize>,
@@ -30,7 +32,7 @@ pub(crate) fn render_tab_bar(
         .collect::<Vec<_>>();
     let pane_strip = config
         .scrolling_panes
-        .then(|| pane_strip_label(snapshot))
+        .then(|| pane_strip_label(snapshot, visible_panes))
         .flatten();
     let pane_strip_area = pane_strip
         .as_deref()
@@ -240,7 +242,10 @@ pub(crate) fn render_tab_bar(
     }
 }
 
-fn pane_strip_label(snapshot: &ClientShellSnapshot) -> Option<String> {
+fn pane_strip_label(
+    snapshot: &ClientShellSnapshot,
+    visible_panes: &[PaneSurfacePane],
+) -> Option<String> {
     let tab_id = snapshot.focused_tab_id.as_deref()?;
     if snapshot
         .tabs
@@ -257,8 +262,19 @@ fn pane_strip_label(snapshot: &ClientShellSnapshot) -> Option<String> {
     let focused = panes
         .iter()
         .position(|pane| Some(pane.pane_id.as_str()) == snapshot.focused_pane_id.as_deref())?;
-    let first_visible = focused.min(panes.len().saturating_sub(2));
-    let hidden_right = panes.len().saturating_sub(first_visible + 2);
+    let visible_bounds = visible_panes.first().and_then(|first| {
+        let last = visible_panes.last()?;
+        let start = panes
+            .iter()
+            .position(|pane| pane.pane_id == first.pane_id)?;
+        let end = panes.iter().position(|pane| pane.pane_id == last.pane_id)?;
+        (start <= focused && focused <= end).then_some((start, end))
+    });
+    let (first_visible, last_visible) = visible_bounds.unwrap_or_else(|| {
+        let start = focused.min(panes.len().saturating_sub(2));
+        (start, (start + 1).min(panes.len() - 1))
+    });
+    let hidden_right = panes.len().saturating_sub(last_visible + 1);
     Some(format!(
         "←{first_visible}  {}/{}  {hidden_right}→",
         focused + 1,
@@ -463,8 +479,18 @@ mod tests {
             (5, "←3  5/5  0→"),
         ] {
             snapshot.focused_pane_id = Some(format!("pane_{focused}"));
-            assert_eq!(pane_strip_label(&snapshot).as_deref(), Some(expected));
+            assert_eq!(pane_strip_label(&snapshot, &[]).as_deref(), Some(expected));
         }
+
+        let mut surface = crate::client::shell::tests::surface();
+        let mut second = surface.panes[0].clone();
+        second.pane_id = "pane_2".into();
+        surface.panes.push(second);
+        snapshot.focused_pane_id = Some("pane_2".into());
+        assert_eq!(
+            pane_strip_label(&snapshot, &surface.panes).as_deref(),
+            Some("←0  2/5  3→")
+        );
     }
 
     #[test]
@@ -489,6 +515,7 @@ mod tests {
             area,
             &snapshot,
             &config,
+            &[],
             &mut 0,
             &mut false,
             None,

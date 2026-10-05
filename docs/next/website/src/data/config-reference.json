@@ -584,6 +584,18 @@
           "description": "Focus the pane to the right in navigate mode. Right arrow is always an alias."
         },
         {
+          "key": "keys.navigate_pane_move_left",
+          "type": "keybinding",
+          "default": "unset",
+          "description": "Move the focused pane left in navigate mode for the experimental scrolling pane strip."
+        },
+        {
+          "key": "keys.navigate_pane_move_right",
+          "type": "keybinding",
+          "default": "unset",
+          "description": "Move the focused pane right in navigate mode for the experimental scrolling pane strip."
+        },
+        {
           "key": "keys.detach",
           "type": "keybinding",
           "default": "\"prefix+q\"",
@@ -865,6 +877,12 @@
       "id": "ui",
       "title": "UI and sidebar",
       "keys": [
+        {
+          "key": "ui.scrolling_panes",
+          "type": "boolean",
+          "default": "false",
+          "description": "Enable the experimental horizontal scrolling pane strip."
+        },
         {
           "key": "ui.sidebar_width",
           "type": "integer",

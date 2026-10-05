@@ -90,6 +90,8 @@ pub struct TileLayout {
     /// focus excursions never corrupt it.
     prev_focus: Option<PaneId>,
     scrolling_widths: HashMap<PaneId, ScrollingPaneWidth>,
+    /// Transient viewport position for the experimental scrolling projection.
+    scrolling_start: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -129,6 +131,7 @@ impl TileLayout {
                 focus: root_id,
                 prev_focus: None,
                 scrolling_widths: HashMap::new(),
+                scrolling_start: 0,
             },
             root_id,
         )
@@ -139,7 +142,18 @@ impl TileLayout {
         if id != self.focus {
             self.prev_focus = Some(self.focus);
             self.focus = id;
+            let ids = self.pane_ids();
+            if let Some(index) = ids.iter().position(|pane| *pane == id) {
+                self.scrolling_start = self.scrolling_start_for(index, ids.len());
+            }
         }
+    }
+
+    fn scrolling_start_for(&self, focus_index: usize, pane_count: usize) -> usize {
+        self.scrolling_start
+            .min(focus_index)
+            .max(focus_index.saturating_sub(1))
+            .min(pane_count.saturating_sub(2))
     }
 
     pub fn focused(&self) -> PaneId {
@@ -183,8 +197,9 @@ impl TileLayout {
     /// Experimental horizontal strip projection of the BSP leaf order.
     /// Each pane's width cycles through half, two thirds, and one third.
     /// The focused pane and one adjacent pane are visible, with the view
-    /// following focus. A neighbor is clipped when their widths exceed the
-    /// viewport, and unused width remains blank when they fit with room left.
+    /// moving only when focus leaves the visible pair. A neighbor is clipped
+    /// when their widths exceed the viewport, and unused width remains blank
+    /// when they fit with room left.
     /// The underlying tree and pane identities are left untouched.
     pub fn scrolling_panes(&self, area: Rect) -> Vec<PaneInfo> {
         let ids = self.pane_ids();
@@ -209,7 +224,7 @@ impl TileLayout {
             )];
         }
 
-        let first_visible = focus_index.min(ids.len() - 2);
+        let first_visible = self.scrolling_start_for(focus_index, ids.len());
         let left_preferred = preferred_width(ids[first_visible]);
         let right_preferred = preferred_width(ids[first_visible + 1]);
         let (left_width, right_width) =
@@ -463,6 +478,7 @@ impl TileLayout {
             focus,
             prev_focus: None,
             scrolling_widths: HashMap::new(),
+            scrolling_start: 0,
         }
     }
 }
@@ -836,6 +852,42 @@ fn split_rect(area: Rect, direction: Direction, ratio: f32) -> (Rect, Rect) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scrolling_focus_preserves_visible_pair_until_focus_leaves_it() {
+        let (mut layout, first) = TileLayout::new();
+        let second = layout
+            .split_pane(first, Direction::Horizontal, 0.5)
+            .expect("first pane exists");
+        let third = layout
+            .split_pane(second, Direction::Horizontal, 0.5)
+            .expect("second pane exists");
+        let area = Rect::new(4, 2, 100, 20);
+        let before = layout.scrolling_panes(area);
+
+        // Clicking the visible right pane must change focus without sliding
+        // the left pane out of the viewport, even with another pane offscreen.
+        layout.focus_pane(second);
+        let after = layout.scrolling_panes(area);
+        for (before, after) in before.iter().zip(&after) {
+            assert_eq!(before.id, after.id);
+            assert_eq!(before.rect, after.rect);
+        }
+        assert!(!after[0].is_focused);
+        assert!(after[1].is_focused);
+
+        layout.focus_pane(third);
+        let shifted = layout.scrolling_panes(area);
+        assert_eq!((shifted[0].id, shifted[1].id), (second, third));
+        layout.focus_pane(second);
+        let back = layout.scrolling_panes(area);
+        assert_eq!((back[0].id, back[1].id), (second, third));
+        assert!(back[0].is_focused);
+        layout.focus_pane(first);
+        let start = layout.scrolling_panes(area);
+        assert_eq!((start[0].id, start[1].id), (first, second));
+        assert_eq!(layout.pane_ids(), vec![first, second, third]);
+    }
 
     #[test]
     fn scrolling_projection_tracks_focus_without_changing_layout() {

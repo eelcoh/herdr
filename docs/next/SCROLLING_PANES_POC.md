@@ -5,7 +5,8 @@ Each pane starts at half the available width and keeps its own width choice.
 The focused pane and one adjacent pane are visible, so opening a third pane
 moves the first one out of view.
 Left and right pane focus follows the strip's order; workspaces remain
-Herdr's vertical level.
+Herdr's vertical level. Clicking either visible pane keeps the current pair
+in place. The strip shifts only when focus moves outside that pair.
 
 The ready-to-use config is `docs/next/scrolling-panes-poc.toml`. On macOS,
 with Rust installed, clone the prototype branch and build it:
@@ -15,6 +16,9 @@ git clone --branch poc/scrolling-panes git@github.com:eelcoh/herdr.git
 cd herdr
 ./scripts/run-scrolling-panes-poc.sh
 ```
+
+On bootc Linux, run the build and launcher inside your development Distrobox
+with Rust and Zig installed, rather than in the host shell.
 
 The script builds the checkout, creates its isolated `/tmp/herdr-poc-*`
 directories, and launches a fresh `poc-widths-v2` session with the demo config.
@@ -36,26 +40,38 @@ scrolling_panes = true
 tab_bar_position = "bottom"
 
 [keys]
-focus_pane_left = ""
-focus_pane_right = ""
+cycle_pane_previous = ["prefix+shift+tab", "alt+comma"]
+cycle_pane_next = ["prefix+tab", "alt+period"]
+focus_pane_left = "prefix+h"
+focus_pane_right = "prefix+l"
 focus_pane_up = ""
 focus_pane_down = ""
-navigate_pane_left = "["
-navigate_pane_right = "]"
+navigate_pane_left = "h"
+navigate_pane_right = "l"
 navigate_pane_down = ""
 navigate_pane_up = ""
-navigate_pane_move_left = "{"
-navigate_pane_move_right = "}"
+navigate_pane_move_left = "shift+h"
+navigate_pane_move_right = "shift+l"
 resize_mode = ""
 resize_pane_right = ["cmd+r", "prefix+r"]
 zoom = ["cmd+f", "prefix+f"]
-previous_workspace = "prefix+k"
-next_workspace = "prefix+j"
+previous_workspace = ["prefix+k", "alt+<", "alt+shift+comma"]
+next_workspace = ["prefix+j", "alt+>", "alt+shift+period"]
 ```
 
+Press `Alt+,` or `Alt+.` to cycle to the previous or next pane.
+Press `Alt+<` or `Alt+>` to switch to the previous or next workspace
+(`Alt+Shift+,` or `Alt+Shift+.` on a US keyboard). These shortcuts take over
+the corresponding shell bindings. On macOS, configure the terminal's Option
+key to send Meta/Esc+ so the shortcuts reach Herdr. Both legacy symbol input
+and enhanced protocol shifted-key input are bound.
+
 Press `Ctrl+b`, then `v` to add a pane to the right of the focused pane.
-Press `Ctrl+b`, then `w` to enter Navigate mode. Use `[` and `]` to focus the
-previous or next pane, and `{` and `}` to move the focused pane left or right.
+Press `Ctrl+b`, then `h` or `l` to focus the previous or next pane directly.
+`Ctrl+b`, then `Tab` or `Shift+Tab` also cycles through panes.
+Press `Ctrl+b`, then `w` to enter Navigate mode. Use `h`/`l` or the left/right
+arrows to focus the previous or next pane, and `Shift+h`/`Shift+l` to move the
+focused pane left or right.
 Navigate mode stays open as you use those keys; press `Enter` to return to the
 terminal. Press `Ctrl+b`, then `Shift+n` to make a workspace, or `j`/`k` to
 switch workspaces. Press `Ctrl+b`, then `q` to detach.

@@ -55,6 +55,7 @@ impl ClientShellState {
                     == Some(ClientEndpointStatus::Online)
         });
         let mut render_state = render::ShellRenderState {
+            visible_panes: &[],
             machine_diagnostics: &self.machine_diagnostics,
             endpoints: &self.endpoints,
             active_endpoint_id: &self.active_endpoint_id,
@@ -211,6 +212,10 @@ impl ClientShellState {
             snapshot,
             &self.config,
             render::ShellRenderState {
+                visible_panes: self
+                    .pane_surface
+                    .as_ref()
+                    .map_or(&[], |surface| &surface.panes),
                 machine_diagnostics: &self.machine_diagnostics,
                 endpoints: &self.endpoints,
                 active_endpoint_id: &self.active_endpoint_id,

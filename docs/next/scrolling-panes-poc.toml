@@ -5,21 +5,27 @@ scrolling_panes = true
 tab_bar_position = "bottom"
 
 [keys]
-focus_pane_left = ""
-focus_pane_right = ""
+# Alt+comma/period cycles panes; Ctrl+B shortcuts remain available.
+cycle_pane_previous = ["prefix+shift+tab", "alt+comma"]
+cycle_pane_next = ["prefix+tab", "alt+period"]
+focus_pane_left = "prefix+h"
+focus_pane_right = "prefix+l"
 focus_pane_up = ""
 focus_pane_down = ""
-navigate_pane_left = "["
-navigate_pane_right = "]"
+# Ctrl+B, W enters Navigate mode: H/L or arrows focus; Shift+H/L moves.
+# Enter returns to typing in the focused pane.
+navigate_pane_left = "h"
+navigate_pane_right = "l"
 navigate_pane_down = ""
 navigate_pane_up = ""
-navigate_pane_move_left = "{"
-navigate_pane_move_right = "}"
+navigate_pane_move_left = "shift+h"
+navigate_pane_move_right = "shift+l"
 resize_mode = ""
 resize_pane_right = ["cmd+r", "prefix+r"]
 zoom = ["cmd+f", "prefix+f"]
-previous_workspace = "prefix+k"
-next_workspace = "prefix+j"
+# Accept both legacy symbols and enhanced keyboard protocol shifted keys.
+previous_workspace = ["prefix+k", "alt+<", "alt+shift+comma"]
+next_workspace = ["prefix+j", "alt+>", "alt+shift+period"]
 
 [theme]
 name = "catppuccin"

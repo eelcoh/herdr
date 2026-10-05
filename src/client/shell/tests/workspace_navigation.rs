@@ -59,26 +59,36 @@ fn scrolling_pane_navigation_keys_stay_in_navigate_mode_until_enter() {
     state.compose(100, 28).unwrap();
     enter_navigation(&mut state);
 
-    assert!(state.handle_input_bytes(b"l").actions.is_empty());
+    assert!(state.handle_input_bytes(b",").actions.is_empty());
     assert_eq!(state.mode, ClientShellMode::Navigate);
     for (key, direction, swap) in [
         (
-            b"[".as_slice(),
+            b"h".as_slice(),
             crate::api::schema::PaneDirection::Left,
             false,
         ),
         (
-            b"]".as_slice(),
+            b"l".as_slice(),
             crate::api::schema::PaneDirection::Right,
             false,
         ),
         (
-            b"{".as_slice(),
+            b"\x1b[D".as_slice(),
+            crate::api::schema::PaneDirection::Left,
+            false,
+        ),
+        (
+            b"\x1b[C".as_slice(),
+            crate::api::schema::PaneDirection::Right,
+            false,
+        ),
+        (
+            b"H".as_slice(),
             crate::api::schema::PaneDirection::Left,
             true,
         ),
         (
-            b"}".as_slice(),
+            b"L".as_slice(),
             crate::api::schema::PaneDirection::Right,
             true,
         ),
@@ -98,6 +108,21 @@ fn scrolling_pane_navigation_keys_stay_in_navigate_mode_until_enter() {
 
     state.handle_input_bytes(b"\r");
     assert_eq!(state.mode, ClientShellMode::Terminal);
+
+    for (key, direction) in [
+        (b"h".as_slice(), crate::api::schema::PaneDirection::Left),
+        (b"l".as_slice(), crate::api::schema::PaneDirection::Right),
+    ] {
+        state.handle_input_bytes(&[0x02]);
+        let outcome = state.handle_input_bytes(key);
+        assert!(
+            matches!(outcome.actions.as_slice(), [ClientShellAction::Endpoint { request, .. }]
+            if matches!(&request.method, crate::api::schema::Method::PaneFocusDirection(params)
+                if params.direction == direction)),
+            "{key:?}"
+        );
+        assert_eq!(state.mode, ClientShellMode::Terminal);
+    }
 }
 
 #[test]
